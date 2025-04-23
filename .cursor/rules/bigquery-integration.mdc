@@ -1,0 +1,91 @@
+---
+description: 
+globs: *.ts,*.tsx
+alwaysApply: false
+---
+# BigQuery Integration for COVID-19 Data
+
+This document outlines the integration with Google BigQuery for accessing COVID-19 statistics data.
+
+## Available COVID-19 Public Datasets
+
+The agent should query the following public BigQuery datasets:
+
+1. `bigquery-public-data.covid19_open_data` - Comprehensive COVID-19 dataset with cases, deaths, and other metrics
+2. `bigquery-public-data.covid19_vaccination_access` - Vaccination data globally
+3. `bigquery-public-data.covid19_nyt` - New York Times COVID-19 data for US
+
+## Client Configuration
+
+The BigQuery client should be configured in `lib/bigquery/client.ts`:
+
+```typescript
+import { BigQuery } from '@google-cloud/bigquery';
+import type { QueryOptions, QueryResultRow } from '@google-cloud/bigquery';
+
+// Type-safe BigQuery client
+export const bigQueryClient = new BigQuery({
+  projectId: process.env.GOOGLE_CLOUD_PROJECT,
+  keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+});
+
+// Generic function to run parameterized queries with proper typing
+export async function runBigQueryQuery<T extends QueryResultRow>(
+  query: string, 
+  params: Record<string, any>
+): Promise<T[]> {
+  const options: QueryOptions = {
+    query,
+    params,
+    location: 'US',
+  };
+  
+  try {
+    const [rows] = await bigQueryClient.query(options);
+    return rows as T[];
+  } catch (error) {
+    console.error('BigQuery error:', error);
+    throw new Error(`Failed to query BigQuery: ${error.message}`);
+  }
+}
+```
+
+## Query Templates
+
+Define parameterized query templates in `lib/bigquery/covid-queries.ts`:
+
+```typescript
+export const COVID_CASE_COUNT_QUERY = `
+  SELECT 
+    date, 
+    cumulative_confirmed as cases,
+    cumulative_deceased as deaths
+  FROM 
+    \`bigquery-public-data.covid19_open_data.covid19_open_data\`
+  WHERE 
+    country_name = @country
+    AND subregion1_name = @region
+    AND date BETWEEN @startDate AND @endDate
+  ORDER BY 
+    date ASC
+`;
+
+export const COVID_VACCINATION_QUERY = `
+  SELECT 
+    date, 
+    cumulative_persons_vaccinated,
+    cumulative_persons_fully_vaccinated
+  FROM 
+    \`bigquery-public-data.covid19_open_data.covid19_open_data\`
+  WHERE 
+    country_name = @country
+    AND date BETWEEN @startDate AND @endDate
+  ORDER BY 
+    date ASC
+`;
+```
+
+## Data Formatting
+
+Create utility functions in `lib/utils/data-formatter.ts` to format query results into easily consumable structures for the agent's responses.
+
