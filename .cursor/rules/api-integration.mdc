@@ -1,0 +1,169 @@
+---
+description: 
+globs: *.tsx,*.ts
+alwaysApply: false
+---
+# API Integration for COVID-19 Agent
+
+This document outlines the structure and implementation of API routes to integrate the Google ADK agent with the Next.js API routes.
+
+## API Route Structure
+
+API routes should be implemented in the `app/api` directory:
+
+- `app/api/agent/route.ts` - Main endpoint for agent interactions
+- `app/api/statistics/[type]/route.ts` - Direct access to COVID statistics by type
+
+## Agent API Implementation
+
+The main agent API route should use Next.js Route Handlers:
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+import { covidAgent } from '@/lib/adk/agent';
+import { cookies } from 'next/headers';
+
+export async function POST(request: NextRequest) {
+  try {
+    const { message } = await request.json();
+    
+    // Get or create session ID from cookies
+    const cookieStore = cookies();
+    let sessionId = cookieStore.get('session_id')?.value;
+    if (!sessionId) {
+      sessionId = crypto.randomUUID();
+    }
+    
+    // Process with ADK agent
+    const response = await covidAgent.generateResponse({
+      message,
+      sessionId,
+    });
+    
+    // Set cookie for session persistence
+    const response = NextResponse.json({ 
+      agentResponse: response.text,
+      data: response.toolResults 
+    });
+    response.cookies.set('session_id', sessionId, { 
+      httpOnly: true,
+      maxAge: 60 * 60 * 24 * 7 // 1 week
+    });
+    
+    return response;
+  } catch (error) {
+    console.error('Agent API error:', error);
+    return NextResponse.json(
+      { error: 'Failed to process your request' },
+      { status: 500 }
+    );
+  }
+}
+```
+
+## Streaming Implementation
+
+For streaming responses, implement a streaming API endpoint:
+
+```typescript
+import { NextRequest } from 'next/server';
+import { covidAgent } from '@/lib/adk/agent';
+import { cookies } from 'next/headers';
+
+export async function POST(request: NextRequest) {
+  const { message } = await request.json();
+  
+  // Get session ID from cookies
+  const cookieStore = cookies();
+  let sessionId = cookieStore.get('session_id')?.value || crypto.randomUUID();
+  
+  // Create a streaming response
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      try {
+        await covidAgent.generateStreamingResponse({
+          message,
+          sessionId,
+          onTextUpdate: (text) => {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`));
+          },
+          onToolResults: (results) => {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ data: results })}\n\n`));
+          },
+          onComplete: () => {
+            controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+            controller.close();
+          }
+        });
+      } catch (error) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: error.message })}\n\n`));
+        controller.close();
+      }
+    }
+  });
+  
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive'
+    }
+  });
+}
+```
+
+## Direct Statistics API
+
+Implement direct access to COVID statistics for data-only requests:
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+import { runBigQueryQuery } from '@/lib/bigquery/client';
+import { COVID_CASE_COUNT_QUERY, COVID_VACCINATION_QUERY } from '@/lib/bigquery/covid-queries';
+import type { CovidStatistic } from '@/lib/types';
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { type: string } }
+) {
+  const { type } = params;
+  const searchParams = request.nextUrl.searchParams;
+  
+  try {
+    // Extract query parameters
+    const country = searchParams.get('country') || 'US';
+    const region = searchParams.get('region') || '';
+    
+    // Run the appropriate query based on type
+    let results: CovidStatistic[] = [];
+    
+    if (type === 'cases') {
+      const rows = await runBigQueryQuery(COVID_CASE_COUNT_QUERY, { 
+        country, region, 
+        startDate: searchParams.get('startDate') || '2020-01-01',
+        endDate: searchParams.get('endDate') || new Date().toISOString().split('T')[0]
+      });
+      
+      results = rows.map(row => ({
+        date: row.date,
+        cases: row.cases,
+        deaths: row.deaths,
+        country,
+        region
+      }));
+    }
+    
+    // Handle other statistic types...
+    
+    return NextResponse.json({ results });
+  } catch (error) {
+    console.error(`Error fetching ${type} statistics:`, error);
+    return NextResponse.json(
+      { error: `Failed to fetch ${type} statistics` },
+      { status: 500 }
+    );
+  }
+}
+```
+

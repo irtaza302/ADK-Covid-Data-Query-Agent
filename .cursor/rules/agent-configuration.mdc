@@ -1,0 +1,58 @@
+---
+description: 
+globs: *.ts,*.tsx
+alwaysApply: false
+---
+# ADK Agent Configuration Guidelines
+
+This document outlines the structure and best practices for configuring the COVID-19 statistics agent using Google's Agent Development Kit.
+
+## Agent Definition
+
+The main agent should be defined in `lib/adk/agent.ts` following this pattern:
+
+```typescript
+import { Agent } from 'google.adk.agents';
+import { getCovidStatistics } from './tools';
+
+export const covidAgent = Agent({
+  name: "covid_statistics_agent",
+  model: "gemini-2.0-flash-exp",
+  description: "Agent to answer questions about COVID-19 statistics using BigQuery data",
+  instruction: "You are an expert on COVID-19 statistics. Use BigQuery to provide accurate data when asked about cases, deaths, vaccinations, or other COVID-19 related metrics.",
+  tools: [getCovidStatistics]
+});
+```
+
+## Tools Implementation
+
+Custom tools should be defined in `lib/adk/tools.ts` as TypeScript functions with proper typing:
+
+```typescript
+import { runBigQueryQuery } from '../bigquery/client';
+import type { CovidQueryParams, CovidQueryResult } from '../types';
+
+export async function getCovidStatistics(params: CovidQueryParams): Promise<CovidQueryResult> {
+  // Implementation that queries BigQuery
+}
+```
+
+## BigQuery Integration
+
+The BigQuery client should be configured in `lib/bigquery/client.ts` with appropriate error handling and type safety.
+
+COVID-19 specific queries should be defined in `lib/bigquery/covid-queries.ts` with parameterized queries for different statistics types.
+
+## Session State
+
+Use session state to remember user preferences and previous queries:
+
+```typescript
+// Example session state usage
+export interface CovidSessionState {
+  lastQueriedRegion?: string;
+  lastQueriedStatistic?: string;
+  preferredVisualization?: 'table' | 'chart';
+}
+```
+

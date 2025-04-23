@@ -1,0 +1,48 @@
+---
+description: 
+globs: *.ts,*.tsx
+alwaysApply: false
+---
+# COVID-19 Data Query Agent Frontend Structure
+
+This project is a Next.js application that provides an interactive interface for querying and visualizing COVID-19 statistics.
+
+## Project Organization
+
+The project follows Next.js 14+ conventions with a focus on TypeScript, Server Components, and shadcn/ui components:
+
+- `app/` - Next.js application routes and server components
+  - `page.tsx` - [Main page](mdc:app/page.tsx) with layout and COVID data display
+  - `layout.tsx` - [Root layout](mdc:app/layout.tsx) with metadata and fonts
+- `components/` - Reusable UI components
+  - `chat/` - Chat-related components
+    - `message.tsx` - [Individual message component](mdc:components/chat/message.tsx)
+    - `message-input.tsx` - [User input component](mdc:components/chat/message-input.tsx) 
+    - `message-list.tsx` - [List of messages](mdc:components/chat/message-list.tsx)
+    - `chat-container.tsx` - [Main chat container](mdc:components/chat/chat-container.tsx)
+  - `data-display/` - Data visualization components
+    - `statistics-table.tsx` - [Tabular display](mdc:components/data-display/statistics-table.tsx) of COVID statistics
+    - `statistics-chart.tsx` - [Chart visualization](mdc:components/data-display/statistics-chart.tsx) of COVID data
+  - `layout/` - Layout components
+    - `header.tsx` - [Application header](mdc:components/layout/header.tsx)
+    - `footer.tsx` - [Application footer](mdc:components/layout/footer.tsx)
+  - `ui/` - shadcn/ui components (auto-generated)
+- `lib/` - Utility functions and shared code
+  - `types.ts` - [TypeScript interfaces](mdc:lib/types.ts) for data structures
+
+## Key Technologies
+
+- Next.js with Server Components
+- TypeScript with strict mode
+- shadcn/ui for UI components
+- Tailwind CSS for styling
+- Recharts for data visualization
+
+## Development Guidelines
+
+1. Use server components by default, add 'use client' only when necessary (e.g., for components that use React hooks)
+2. All components should be properly typed with TypeScript interfaces
+3. Follow the established naming conventions (kebab-case for files)
+
+
+4. Keep shadcn components in the ui/ directory and don't modify them directly
